@@ -1,1 +1,3 @@
-requirements.txt
+selenium==4.9.1
+undetected-chromedriver
+pyTelegramBotAPI
