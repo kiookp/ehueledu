@@ -8,6 +8,7 @@ import telebot
 import undetected_chromedriver as uc
 import configparser
 from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import TimeoutException
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -58,12 +59,14 @@ try:
     login_button.click()
     error_label_locator = (By.XPATH, "//*[@id='warnOrErrDiv']/label")
     success_element_locator = (By.XPATH, "/html/body/section/article")
+    bind_phone_element_locator = (By.XPATH, "//*[@id='body_area']/form/div[1]/table/tbody/tr/td/input")
+    cancel_button_locator = (By.XPATH, "//*[@id='body_area']/form/div[2]/div/div[2]")
 
     try:
         wait.until(EC.visibility_of_element_located(success_element_locator))
         print("登录成功！")
         bot = telebot.TeleBot(telegram_bot_token)
-        send_telegram_message(bot, telegram_chat_id, f"账号 {username}：登录成功！")
+        send_telegram_message(bot, telegram_chat_id, f"账号 {username}：登录成功!")
 
         cookies = driver.get_cookies()
 
@@ -102,8 +105,60 @@ try:
                 print("正在刷新页面...")
                 driver.refresh()
 
-    except:
-        if driver.find_elements(*error_label_locator):
+    except TimeoutException:
+        if driver.find_elements(*bind_phone_element_locator):
+            print("需要绑定手机号！以跳过")
+            cancel_button = driver.find_element(*cancel_button_locator)
+            cancel_button.click()
+            try:
+                wait.until(EC.visibility_of_element_located(success_element_locator))
+                print("登录成功！")
+                bot = telebot.TeleBot(telegram_bot_token)
+                send_telegram_message(bot, telegram_chat_id, f"账号 {username}：登录成功!")
+
+                cookies = driver.get_cookies()
+
+                coremail_sid = None
+                coremail = None
+
+                for cookie in cookies:
+                    if cookie['name'] == 'Coremail.sid':
+                        coremail_sid = cookie['value']
+                    elif cookie['name'] == 'Coremail':
+                        coremail = cookie['value']
+
+                print("Coremail.sid:", coremail_sid)
+                print("Coremail:", coremail)
+                print("uid:", username)
+                print("开始保活...")
+                send_telegram_message(bot, telegram_chat_id, "开始保活...")
+
+                message = f"Coremail.sid: {coremail_sid}\nCoremail: {coremail}"
+                send_telegram_message(bot, telegram_chat_id, message)
+
+                while True:
+                    try:
+                        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#mltree_2_span"))).click()
+                        time.sleep(60)
+
+                        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#mltree_3_span"))).click()
+                        time.sleep(60)
+
+                        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#mltree_4_span")))
+                        driver.refresh()
+                        time.sleep(10)
+
+                    except Exception as e:
+                        print("出现异常：", str(e))
+                        print("正在刷新页面...")
+                        driver.refresh()
+
+            except TimeoutException:
+                print("登录失败！")
+                bot = telebot.TeleBot(telegram_bot_token)
+                send_telegram_message(bot, telegram_chat_id, "登录失败！")
+
+        elif driver.find_elements(*error_label_locator):
             print("账号或密码错误，登录失败！")
             bot = telebot.TeleBot(telegram_bot_token)
             send_telegram_message(bot, telegram_chat_id, "账号或密码错误，登录失败！")
